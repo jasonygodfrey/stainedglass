@@ -15,7 +15,7 @@ export function initializeThreeJS(mountPoint) {
 
     // Load the stained glass texture
     const textureLoader = new THREE.TextureLoader();
-    const stainedGlassTexture = textureLoader.load('stainedglasstexture.png'); // Ensure the path is correct
+    const stainedGlassTexture = textureLoader.load('stainedglass2.png'); // Ensure the path is correct
 
     // Stained glass material
     const material = new THREE.MeshBasicMaterial({
