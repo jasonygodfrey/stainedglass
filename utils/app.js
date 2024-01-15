@@ -1,104 +1,109 @@
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { DeviceOrientationControls } from 'three-stdlib';
 
 export function initializeThreeJS(mountPoint) {
-    const clock = new THREE.Clock();
-    let mouse = new THREE.Vector2();
-
-    // Set up the scene, camera, and renderer
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 5;
+    camera.position.set(0, 0, 8);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0xF5F5DC, 1); // Beige color as default
-
     mountPoint.appendChild(renderer.domElement);
 
-    // Load the GLTF model
-    let mixer; // Animation mixer
-    const loader = new GLTFLoader();
-    loader.load('sushiresturantkit/scene.gltf', function (gltf) {
-        gltf.scene.scale.set(1, 1, 1);
-        scene.add(gltf.scene);
-        scene.position.x -= 15;
-        scene.position.y -= 3;
-        if (gltf.animations && gltf.animations.length) {
-            mixer = new THREE.AnimationMixer(gltf.scene);
-            const action = mixer.clipAction(gltf.animations[0]);
-            action.play();
-        }
-    }, undefined, function (error) {
-        console.error(error);
+    // Load the stained glass texture
+    const textureLoader = new THREE.TextureLoader();
+    const stainedGlassTexture = textureLoader.load('stainedglasstexture.png'); // Ensure the path is correct
+
+    // Stained glass material
+    const material = new THREE.MeshBasicMaterial({
+        map: stainedGlassTexture,
+        transparent: true,
+        opacity: 0.5
     });
 
-    // Create lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
-    scene.add(ambientLight);
+    // Stained glass geometry and mesh
+    const planeGeometry = new THREE.PlaneGeometry(30, 30);
+    const planeMesh = new THREE.Mesh(planeGeometry, material);
+    planeMesh.position.set(0, 0, -10);
+    scene.add(planeMesh);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(1, 1, 1);
-    scene.add(directionalLight);
+    // Black square behind the glass
+    const blackSquareGeometry = new THREE.PlaneGeometry(35, 35);
+    const blackSquareMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const blackSquareMesh = new THREE.Mesh(blackSquareGeometry, blackSquareMaterial);
+    blackSquareMesh.position.z = -20;
+    scene.add(blackSquareMesh);
 
-    // Post-processing
-    const renderScene = new RenderPass(scene, camera);
+ // Red sphere (light source)
+    const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000 });
+    const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    redSphere.position.z = -20;
+    scene.add(redSphere);
 
-    const bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        1.5, 0.4, 0.85
-    );
-    bloomPass.threshold = 0.1;
-    bloomPass.strength = 0.4;
-    bloomPass.radius = 0.1;
+    // Light beam
+    const beamGeometry = new THREE.CylinderGeometry(0.1, 0.1, 50, 32);
+    const beamMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.6, emissive: 0xff0000 });
+    const beamMesh = new THREE.Mesh(beamGeometry, beamMaterial);
+    beamMesh.rotation.x = Math.PI / 2;
+    scene.add(beamMesh);
 
-    const composer = new EffectComposer(renderer);
-    composer.addPass(renderScene);
-    composer.addPass(bloomPass);
+    // Spotlight for beam effect
+    const spotlight = new THREE.SpotLight(0xff0000, 1, 100, Math.PI / 4);
+    spotlight.position.z = -20;
+    scene.add(spotlight);
 
-    // Handle window resize
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        composer.setSize(window.innerWidth, window.innerHeight);
+    // Update beam position and orientation based on mouse movement
+    function onMouseMove(event) {
+        const vector = new THREE.Vector3(
+            (event.clientX / window.innerWidth) * 2 - 1,
+            - (event.clientY / window.innerHeight) * 2 + 1,
+            0.5
+        );
+        vector.unproject(camera);
+        const dir = vector.sub(camera.position).normalize();
+        const distance = - camera.position.z / dir.z;
+        const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+        pos.z = -20;
+
+        redSphere.position.copy(pos);
+        beamMesh.position.copy(pos);
+        beamMesh.lookAt(camera.position);
     }
-    window.addEventListener('resize', onWindowResize, false);
+    window.addEventListener('mousemove', onMouseMove);
 
-    // Device orientation controls for mobile
-    let deviceOrientationControls;
-    if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
-        deviceOrientationControls = new DeviceOrientationControls(camera);
-    }
+    // OrbitControls
+//for easy scene navigation
+const controls = new OrbitControls(camera, renderer.domElement);
+// Handle window resize
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onWindowResize);
 
-    // Animation loop
-    function animate() {
-        requestAnimationFrame(animate);
-        const delta = clock.getDelta();
-        if (mixer) {
-            mixer.update(delta);
-        }
-        if (deviceOrientationControls) {
-            deviceOrientationControls.update();
-        }
-        composer.render();
-    }
-    animate();
+// Post-processing for bloom effect
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    1.0, // Intensity of the bloom
+    0.5, // Radius of the bloom
+    0.1  // Threshold for bloom
+);
+composer.addPass(renderPass);
+composer.addPass(bloomPass);
 
-    // Mouse and zoom controls
-    window.addEventListener('mousemove', (event) => {
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    });
+// Animation loop
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    composer.render();
+}
 
-    function zoom(direction) {
-        camera.position.z += direction;
-    }
-    window.addEventListener('wheel', (event) => {
-        zoom(event.deltaY > 0 ? 1 : -1);
-    });
+animate();
 }
